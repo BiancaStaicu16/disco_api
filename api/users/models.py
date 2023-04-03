@@ -1,10 +1,13 @@
 from django.conf import settings
 from django.db import models
 from api.models import TimestampedModel
-from imagekit.models import ImageSpecField
-from imagekit.processors import ResizeToFit
 from django.contrib.auth.models import AbstractUser
 from django.core.validators import MaxValueValidator, MinValueValidator
+from PIL import Image
+from django.core.files.images import get_image_dimensions
+from sorl.thumbnail import ImageField as SorlImageField
+from sorl.thumbnail import get_thumbnail
+import os
 
 
 class AccountTier(TimestampedModel):
@@ -23,22 +26,32 @@ class User(TimestampedModel, AbstractUser):
 
 class UserImage(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
-    image = models.FileField()
-    thumbnail_200 = ImageSpecField(
-        source="image",
-        processors=[ResizeToFit(height=200)],
-        format="JPEG",
-        options={"quality": 80},
-    )
-    thumbnail_400 = ImageSpecField(
-        source="image",
-        processors=[ResizeToFit(height=400)],
-        format="JPEG",
-        options={"quality": 80},
-    )
+    image = models.ImageField()
+    thumbnail_200 = SorlImageField()
+    thumbnail_400 = SorlImageField()
 
     def __str__(self):
         return f"{self.user.username} - {self.image.name}"
+
+    def save(self, *args, **kwargs):
+        if not settings.TESTING:  # Cannot get thumbnails for mocked images.
+            # Get image extension.
+            extension = os.path.splitext(self.image.name)[1].replace(".", "").upper()
+
+            # Get image dimensions and adjust them to match the new ratio.
+            width, height = get_image_dimensions(self.image)
+            aspect_ratio = width / height
+            size_200 = f"{int(aspect_ratio * 200)}x200"
+            size_400 = f"{int(aspect_ratio * 400)}x400"
+
+            # Save thumbnail images.
+            self.thumbnail_200 = get_thumbnail(
+                self.image, size_200, quality=99, extension=extension
+            ).name
+            self.thumbnail_400 = get_thumbnail(
+                self.image, size_400, quality=99, extension=extension
+            ).name
+        super(UserImage, self).save(*args, **kwargs)
 
 
 class ExpiringUserImage(TimestampedModel):

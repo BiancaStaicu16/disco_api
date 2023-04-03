@@ -5,4 +5,4 @@ Pillow==9.0.1
 django-imagekit==4.1.0
 requests==2.20.1
 black==23.1.0
-
+sorl-thumbnail==12.9.0

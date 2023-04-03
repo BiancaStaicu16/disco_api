@@ -1,74 +1,113 @@
 {
-    "openapi": "3.1.0",
-    "x-stoplight": {
-      "id": "fb3cfxz2jweb2"
-    },
-    "info": {
-      "title": "disco_api",
-      "version": "1.0",
-      "description": "Disco project API specification."
-    },
-    "servers": [
-      {
-        "url": "http://localhost:3000"
-      }
-    ],
-    "paths": {
-      "/users/images/": {
-        "get": {
-          "summary": "Get user images",
-          "tags": [],
-          "responses": {
-            "200": {
-              "description": "OK",
-              "content": {
-                "application/json": {
-                  "schema": {
-                    "type": "object",
-                    "properties": {
-                      "count": {
-                        "type": "integer"
-                      },
-                      "previous": {
-                        "type": "string"
-                      },
-                      "next": {
-                        "type": "string"
-                      },
-                      "results": {
-                        "type": "array",
-                        "items": {
-                          "$ref": "#/components/schemas/UserImage"
-                        }
+  "openapi": "3.1.0",
+  "x-stoplight": {
+    "id": "fb3cfxz2jweb2"
+  },
+  "info": {
+    "title": "disco_api",
+    "version": "1.0",
+    "description": "Disco project API specification."
+  },
+  "servers": [
+    {
+      "url": "http://localhost:3000"
+    }
+  ],
+  "paths": {
+    "/users/images/": {
+      "get": {
+        "summary": "Get user images",
+        "tags": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "count": {
+                      "type": "integer"
+                    },
+                    "previous": {
+                      "type": "string"
+                    },
+                    "next": {
+                      "type": "string"
+                    },
+                    "results": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/UserImage"
                       }
                     }
                   }
                 }
               }
-            },
-            "401": {
-              "description": "Unauthorized"
             }
           },
-          "operationId": "get-users"
+          "401": {
+            "description": "Unauthorized"
+          }
         },
-        "parameters": [],
-        "post": {
-          "summary": "Create user image",
-          "operationId": "post-users-images",
-          "responses": {
-            "200": {
-              "description": "OK",
-              "content": {
-                "application/json": {
-                  "schema": {
-                    "$ref": "#/components/schemas/UserImage"
-                  }
+        "operationId": "get-users"
+      },
+      "parameters": [],
+      "post": {
+        "summary": "Create user image",
+        "operationId": "post-users-images",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserImage"
                 }
               }
             }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "image": {
+                    "type": "string",
+                    "description": "filefield"
+                  }
+                },
+                "required": [
+                  "image"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/users/images/{id}/generate_expiring_link/": {
+      "parameters": [
+        {
+          "schema": {
+            "type": "string"
           },
-          "requestBody": {
+          "name": "id",
+          "in": "path",
+          "required": true
+        }
+      ],
+      "post": {
+        "summary": "Generate expiring link for image",
+        "operationId": "post-users-images-id-generate_expiring_link",
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "Bad Request",
             "content": {
               "application/json": {
                 "schema": {
@@ -76,7 +115,65 @@
                   "properties": {
                     "image": {
                       "type": "string",
-                      "description": "filefield"
+                      "description": "Image link"
+                    }
+                  },
+                  "required": [
+                    "image"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "description": "Only users with enterprise plan can access this.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "expires_in_seconds": {
+                    "type": "integer",
+                    "description": "Value in range [300, 30000]"
+                  }
+                },
+                "required": [
+                  "expires_in_seconds"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/users/images/expiring/{id}/": {
+      "parameters": [
+        {
+          "schema": {
+            "type": "string"
+          },
+          "name": "id",
+          "in": "path",
+          "required": true
+        }
+      ],
+      "get": {
+        "summary": "Get expiring image",
+        "tags": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "image": {
+                      "type": "string"
                     }
                   },
                   "required": [
@@ -86,124 +183,39 @@
               }
             }
           }
-        }
-      },
-      "/users/images/{id}/generate_expiring_link/": {
-        "parameters": [
-          {
-            "schema": {
-              "type": "string"
-            },
-            "name": "id",
-            "in": "path",
-            "required": true
-          }
-        ],
-        "post": {
-          "summary": "Generate expiring link for image",
-          "operationId": "post-users-images-id-generate_expiring_link",
-          "responses": {
-            "200": {
-              "description": "OK"
-            },
-            "400": {
-              "description": "Bad Request",
-              "content": {
-                "application/json": {
-                  "schema": {
-                    "type": "object",
-                    "properties": {
-                      "image": {
-                        "type": "string",
-                        "description": "Image link"
-                      }
-                    },
-                    "required": [
-                      "image"
-                    ]
-                  }
-                }
-              }
-            },
-            "403": {
-              "description": "Forbidden"
-            }
-          },
-          "description": "Only users with enterprise plan can access this.",
-          "requestBody": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "expires_in_seconds": {
-                      "type": "integer",
-                      "description": "Value in range [300, 30000]"
-                    }
-                  },
-                  "required": [
-                    "expires_in_seconds"
-                  ]
-                }
-              }
-            }
-          }
-        }
-      },
-      "/users/images/expiring/{id}/": {
-        "parameters": [
-          {
-            "schema": {
-              "type": "string"
-            },
-            "name": "id",
-            "in": "path",
-            "required": true
-          }
-        ],
-        "get": {
-          "summary": "Get expiring image",
-          "tags": [],
-          "responses": {
-            "200": {
-              "description": "OK",
-              "content": {
-                "image/pdf": {
-                  "schema": {
-                    "type": "object",
-                    "properties": {}
-                  }
-                }
-              }
-            }
-          },
-          "operationId": "get-users-images-expiring-id",
-          "description": "Only if the image has not expired."
-        }
+        },
+        "operationId": "get-users-images-expiring-id",
+        "description": "Only if the image has not expired."
       }
-    },
-    "components": {
-      "schemas": {
-        "UserImage": {
-          "title": "UserImage",
-          "x-stoplight": {
-            "id": "cw6fzzwfxokjs"
+    }
+  },
+  "components": {
+    "schemas": {
+      "UserImage": {
+        "title": "UserImage",
+        "x-stoplight": {
+          "id": "cw6fzzwfxokjs"
+        },
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
           },
-          "type": "object",
-          "properties": {
-            "id": {
-              "type": "integer"
-            },
-            "image": {
-              "type": "string",
-              "description": "Link to image"
-            }
+          "image": {
+            "type": "string",
+            "description": "Link to image"
           },
-          "required": [
-            "id",
-            "image"
-          ]
-        }
+          "thumbnail_200": {
+            "type": "string"
+          },
+          "thumbnail_400": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ]
       }
     }
   }
+}

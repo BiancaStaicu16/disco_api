@@ -1,6 +1,10 @@
 from rest_framework import viewsets, permissions, status, generics
 from .models import ExpiringUserImage, UserImage
-from .serializers import UserImageSerializer, ExpiringUserImageSerializer
+from .serializers import (
+    UserImageGetSerializer,
+    ExpiringUserImageSerializer,
+    UserImagePostSerializer,
+)
 from rest_framework.response import Response
 from rest_framework.decorators import action
 import os
@@ -21,15 +25,29 @@ class UserImageViewSet(viewsets.ModelViewSet):
     Upload a new image for the authenticated user.
     """
 
-    serializer_class = UserImageSerializer
     permission_classes = [permissions.IsAuthenticated]
     throttle_classes = [UserRateThrottle]
+
+    def get_serializer_class(self):
+        if self.action == "list":
+            return UserImageGetSerializer
+        if self.action == "create":
+            return UserImagePostSerializer
 
     def get_queryset(self):
         return UserImage.objects.filter(user=self.request.user)
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
+
+    def create(self, request, *args, **kwargs):
+        response = super().create(request, *args, **kwargs)
+        instance_id = response.data["id"]
+        image = UserImage.objects.get(id=instance_id)
+        return Response(
+            UserImageGetSerializer(image, context={"request": request}).data,
+            status=status.HTTP_201_CREATED,
+        )
 
     @action(detail=True, methods=["POST"], url_path="generate_expiring_link")
     def generate_expiring_link(self, request, pk):

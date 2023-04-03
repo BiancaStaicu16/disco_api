@@ -1,12 +1,12 @@
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 from rest_framework.test import APITestCase
 from rest_framework import status
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.contrib.auth import get_user_model
 from api.users.models import AccountTier, UserImage, ExpiringUserImage
 from django.utils import timezone
-from disco import settings
 from rest_framework.exceptions import ErrorDetail
+from django.core.files.uploadedfile import SimpleUploadedFile
 
 User = get_user_model()
 
@@ -24,17 +24,25 @@ class UserImageAPITestCase(APITestCase):
             password="testpassword",
             account_tier=self.account_tier,
         )
-        self.mock_image = MagicMock(spec=SimpleUploadedFile)
+        self.mock_image = SimpleUploadedFile(
+            name="test_image.jpg",
+            content=open("api/users/tests/download.png", "rb").read(),
+            content_type="image/jpeg",
+        )
         self.client.force_authenticate(user=self.user)
 
     def test_create_user_image(self):
         # As a user, upload an image.
-        self.mock_image.name = "test_image.jpg"
-        self.mock_image.content_type = "image/jpeg"
         response = self.client.post("/api/users/images/", {"image": self.mock_image})
-
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertTrue(UserImage.objects.filter(user=self.user).exists())
+
+    def test_create_user_image__basic_subscription(self):
+        response = self.client.post("/api/users/images/", {"image": self.mock_image})
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertIn("thumbnail_200", response.data)
+        self.assertNotIn("thumbnail_400", response.data)
+        self.assertNotIn("image", response.data)
 
     def test_create_user_image__uses_authenticated_user(self):
         """
@@ -96,13 +104,10 @@ class UserImageAPITestCase(APITestCase):
         )
         self.assertFalse(ExpiringUserImage.objects.filter(image=user_image).exists())
 
-    @patch("django.utils.timezone.now")
-    def test_retrieve_expiring_image(self, mock_now):
+    def test_retrieve_expiring_image(self):
         # Supported format.
-        mock_now.return_value = timezone.datetime(2023, 1, 1, tzinfo=timezone.utc)
-        self.mock_image.name = "test_image.jpg"
-        self.mock_image.content_type = "image/jpeg"
-        user_image = UserImage.objects.create(user=self.user, image=self.mock_image)
+        response = self.client.post("/api/users/images/", {"image": self.mock_image})
+        user_image = UserImage.objects.get(id=response.data["id"])
         expiring_user_image = ExpiringUserImage.objects.create(
             image=user_image, expires_in_seconds=300
         )
@@ -136,14 +141,33 @@ class UserImageAPITestCase(APITestCase):
     def test_list_user_images(self):
         # Create a few mock images for the user.
         for i in range(3):
-            mock_image = MagicMock(spec=SimpleUploadedFile)
-            mock_image.name = f"test_image_{i}.jpg"
-            mock_image.content_type = "image/jpeg"
-            UserImage.objects.create(user=self.user, image=mock_image)
+            response = self.client.post(
+                "/api/users/images/", {"image": self.mock_image}
+            )
 
         response = self.client.get("/api/users/images/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data), 4)
+
+    def test_list_user_images__premium_subcsription(self):
+        account_tier = AccountTier.objects.create(
+            name="Premium",
+            thumbnail_sizes="200,400",
+            original_link=True,
+            expiring_links=True,
+        )
+        user = User.objects.create_user(
+            username="testseconduser",
+            password="testpassword",
+            account_tier=account_tier,
+        )
+        self.client.force_authenticate(user=user)
+        response = self.client.post("/api/users/images/", {"image": self.mock_image})
+        response = self.client.get("/api/users/images/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("image", response.data["results"][0])
+        self.assertIn("thumbnail_200", response.data["results"][0])
+        self.assertIn("thumbnail_400", response.data["results"][0])
 
     def test_list_user_images_unauthenticated(self):
         # Log out the test user.
