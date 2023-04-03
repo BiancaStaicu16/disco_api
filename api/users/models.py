@@ -42,7 +42,6 @@ class UserImage(models.Model):
 
 
 class ExpiringUserImage(TimestampedModel):
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     image = models.ForeignKey(UserImage, on_delete=models.CASCADE)
     expires_in_seconds = models.IntegerField(
         default=300, validators=[MaxValueValidator(30_000), MinValueValidator(300)]

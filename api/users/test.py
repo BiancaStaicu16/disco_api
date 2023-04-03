@@ -6,6 +6,7 @@ from django.contrib.auth import get_user_model
 from api.users.models import AccountTier, UserImage, ExpiringUserImage
 from django.utils import timezone
 from disco import settings
+from rest_framework.exceptions import ErrorDetail
 
 User = get_user_model()
 
@@ -23,10 +24,6 @@ class UserImageAPITestCase(APITestCase):
             password="testpassword",
             account_tier=self.account_tier,
         )
-        # Increase rate limits for testing purposes.
-        # Simply adjust this when needed.
-        settings.REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]["user"] = "10/hour"
-
         self.mock_image = MagicMock(spec=SimpleUploadedFile)
         self.client.force_authenticate(user=self.user)
 
@@ -38,6 +35,25 @@ class UserImageAPITestCase(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertTrue(UserImage.objects.filter(user=self.user).exists())
+
+    def test_create_user_image__uses_authenticated_user(self):
+        """
+        Make sure that the authenticated user can only upload images to their own account.
+        """
+        self.mock_image.name = "test_image.jpg"
+        self.mock_image.content_type = "image/jpeg"
+        user_2 = User.objects.create_user(
+            username="testuser2",
+            password="testpassword",
+            account_tier=self.account_tier,
+        )
+        response = self.client.post(
+            "/api/users/images/", {"image": self.mock_image, "user": user_2.pk}
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertTrue(UserImage.objects.filter(user=self.user).exists())
+        self.assertFalse(UserImage.objects.filter(user=user_2).exists())
 
     @patch("django.utils.timezone.now")
     def test_generate_expiring_link(self, mock_now):
@@ -52,9 +68,33 @@ class UserImageAPITestCase(APITestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertTrue(
-            ExpiringUserImage.objects.filter(user=self.user, image=user_image).exists()
+        self.assertTrue(ExpiringUserImage.objects.filter(image=user_image).exists())
+
+    @patch("django.utils.timezone.now")
+    def test_generate_expiring_link__bad_expires_in_seconds(self, mock_now):
+        # Generate expiring link while mocking the current date.
+        mock_now.return_value = timezone.datetime(2023, 1, 1, tzinfo=timezone.utc)
+        self.mock_image.name = "test_image.jpg"
+        self.mock_image.content_type = "image/jpeg"
+        user_image = UserImage.objects.create(user=self.user, image=self.mock_image)
+        response = self.client.post(
+            f"/api/users/images/{user_image.pk}/generate_expiring_link/",
+            {"expires_in_seconds": 299},
         )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(
+            response.data,
+            {
+                "expires_in_seconds": [
+                    ErrorDetail(
+                        string="Ensure this value is greater than or equal to 300.",
+                        code="min_value",
+                    )
+                ]
+            },
+        )
+        self.assertFalse(ExpiringUserImage.objects.filter(image=user_image).exists())
 
     @patch("django.utils.timezone.now")
     def test_retrieve_expiring_image(self, mock_now):
@@ -64,7 +104,7 @@ class UserImageAPITestCase(APITestCase):
         self.mock_image.content_type = "image/jpeg"
         user_image = UserImage.objects.create(user=self.user, image=self.mock_image)
         expiring_user_image = ExpiringUserImage.objects.create(
-            user=self.user, image=user_image, expires_in_seconds=300
+            image=user_image, expires_in_seconds=300
         )
 
         response = self.client.get(
@@ -83,7 +123,14 @@ class UserImageAPITestCase(APITestCase):
         self.assertFalse(UserImage.objects.filter(user=self.user).exists())
         self.assertEqual(
             response.data,
-            {"error": "Image format not supported. Please upload a PNG or JPG image."},
+            {
+                "image": [
+                    ErrorDetail(
+                        string="Image format not supported. Please upload a PNG or JPG image.",
+                        code="invalid",
+                    )
+                ]
+            },
         )
 
     def test_list_user_images(self):

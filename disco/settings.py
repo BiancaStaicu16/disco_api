@@ -175,6 +175,9 @@ REST_FRAMEWORK = {
     },
 }
 
+if TESTING:
+    del REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]
+
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # Override the default user model.
